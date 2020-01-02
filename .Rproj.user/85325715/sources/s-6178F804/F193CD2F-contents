@@ -1,0 +1,134 @@
+#test for mediation effect
+library(pwr)
+library(mvtnorm)
+library(Matrix)
+
+Media.effect<-function(){	
+  ## stimulate v and u
+  Ttest_uv <- NULL
+  Sigma_U <- matrix(0.3, ncol=5, nrow=5)+diag(0.7, 5)
+  Sigma_V <- matrix(0.5, ncol=5, nrow=5)+diag(0.7, 5)
+  mu_u <- c(0.5, 0.25, 0.25, 0.75, 0.75)
+  mu_v <- c(0.2, 0.1, 0.1, 0.3, 0.3)
+  for (i in 1:500) {
+    U <- rmvnorm(n=1, mean=sqrt(500)*mu_u , Sigma_U)
+    V <- rmvnorm(n=1, mean=sqrt(500)*mu_v, Sigma_V)
+    mean_uv <- 500*sum(mu_u*mu_v)
+    Ttest_uv[i] <- (U%*%t(V)-mean_uv)/sqrt(V%*%Sigma_U%*%t(V)+U%*%Sigma_V%*%t(U))
+  }
+  qqnorm(Ttest_uv)
+  qqline(Ttest_uv)
+  sqrt(V%*%Sigma_U%*%t(V)+U%*%Sigma_V%*%t(U))
+  
+  ## stimulate for test(H0)
+  T1error <- NULL
+  n=200
+  k=1
+
+    Ttest <- NULL
+    for (size in c(50,100,200,300,500)) {
+      for (j in 1:n) {
+        S <- NULL
+        Y<- NULL
+        M <- matrix(0,nrow = size, ncol = 5)
+        X <- matrix(0,nrow = size, ncol = 5)
+        for (i in 1:size) {
+          delta <- 0.08
+          Beta=matrix(c(0,0,0,0.24,0.24),nrow = 5)        # the association between exposure and mediators
+          Alpha=matrix(c(0.48,0.48,0.48,0,0),nrow = 5)   	# the association between mediators and outcome
+          # stimulate S
+          S[i] <- matrix(rnorm(1,0,1), nrow = 1)  
+          #stimulate M&Y
+          v<-matrix(0, ncol=5, nrow=5)+diag(0.8, 5)
+          epsilon <-t(rmvnorm(n=1, mean=rep(0, 5), v))
+          M[i,] <- 0.8 + S[i]*Alpha + epsilon
+          Y[i] <- 0.5*S[i] + 1.2 + t(M[i,])%*%Beta +  rnorm(1,0,1)
+          # stimulate X
+          x <- c(rnorm(5,0,1))
+          X[i,] <- matrix(x,nrow = 5,byrow = T)
+        }
+        # test1 evaluate T
+        fit.m <- lm(M~X+S)
+        vcov(fit.m)
+        fit.y <- lm(Y~X+S+M)
+        vcov(fit.y)
+        Alpha_hat <- fit.m$coef[7,]
+        Beta_hat <- fit.y$coef[8:12]
+        Sigma_Al <- vcov(fit.m)[c(7,14,21,28,35),c(7,14,21,28,35)]
+        Sigma_Be <- vcov(fit.y)[c(8:12), c(8:12)]
+        testT_hat <- (t(Alpha_hat)%*%Beta_hat)^2/(t(Alpha_hat)%*% Sigma_Be%*%Alpha_hat+t(Beta_hat)%*% Sigma_Al%*%Beta_hat)
+        Ttest[j] <- testT_hat
+        
+      }
+      type1error <- ifelse(Ttest>qchisq(0.95,1),1,0)
+      mean(type1error)
+      T1error[k] <- mean(type1error )
+      k=k+1
+    }
+  plot(c(50,100,200,300,500),T1error, xlab = 'sample size', ylim = c(0,0.07),main = 'PT-N')
+  lines(c(50,100,200,300,500),T1error)
+  #qqplot(Ttest)
+  qqplot(qchisq(ppoints(500), df = 1),Ttest)
+  abline(0,1)
+  qqline(qchisq(ppoints(200),df=1), distribution = function(p) qchisq(p, df = 1))
+
+  
+  ## stimulate for test(H1)
+  Tpower <- NULL
+  n=70
+  k=1
+  size=2000
+  Ttest <- NULL
+  for (delta in c(0.005,0.02,0.04,0.06,0.08,0.1)) {
+    for (j in 1:n) {
+      S <- NULL
+      Y<- NULL
+      M <- matrix(0,nrow = size, ncol = 5)
+      X <- matrix(0,nrow = size, ncol = 5)
+      for (i in 1:size) {
+        Beta=matrix(rep(delta*0.4),nrow = 5)        # the association between exposure and mediators
+        Alpha=matrix(rep(delta*0.8),nrow = 5)   	# the association between mediators and outcome
+        # stimulate S
+        S[i] <- matrix(rnorm(1,0,1), nrow = 1)  
+        #stimulate M&Y
+        v<-matrix(0, ncol=5, nrow=5)+diag(0.8, 5)
+        epsilon <-t(rmvnorm(n=1, mean=rep(0, 5), v))
+        M[i,] <- 0.8 + S[i]*Alpha + epsilon
+        Y[i] <- 0.5*S[i] + 1.2 + t(M[i,])%*%Beta +  rnorm(1,0,1)
+        # stimulate X
+        x <- c(rnorm(5,0,1))
+        X[i,] <- matrix(x,nrow = 5,byrow = T)
+      }
+      # test1 evaluate T
+      fit.m <- lm(M~X+S)
+      vcov(fit.m)
+      fit.y <- lm(Y~X+S+M)
+      vcov(fit.y)
+      Alpha_hat <- fit.m$coef[7,]
+      Beta_hat <- fit.y$coef[8:12]
+      Sigma_Al <- vcov(fit.m)[c(7,14,21,28,35),c(7,14,21,28,35)]
+      Sigma_Be <- vcov(fit.y)[c(8:12), c(8:12)]
+      testT_hat <- (t(Alpha_hat)%*%Beta_hat)^2/(t(Alpha_hat)%*% Sigma_Be%*%Alpha_hat+t(Beta_hat)%*% Sigma_Al%*%Beta_hat)
+      Ttest[j] <- testT_hat
+      
+    }
+    tpower <- ifelse(Ttest>qchisq(0.95,1),1,0)
+    mean(tpower)
+    Tpower[k] <- mean(tpower)
+    k=k+1
+  }
+  
+  qqplot(qchisq(ppoints(1000), df = 1),Ttest)
+  abline(0,1)
+  qqnorm(Ttest)
+  qqline(Ttest)
+  plot(c(0.005,0.02,0.04,0.06,0.08,0.1),Tpower, xlab = 'delta', ylim = c(0,1),main = 'PT-N')
+  lines(c(0.005,0.02,0.04,0.06,0.08,0.1),Tpower)
+}
+
+
+y <- rchisq(500, df = 3)
+qqplot(qchisq(ppoints(500), df = 3),y)
+
+
+

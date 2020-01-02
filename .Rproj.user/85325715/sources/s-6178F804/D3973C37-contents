@@ -1,0 +1,83 @@
+---
+title: "Homework-2019.12.20"
+author: "By 19011"
+date: "2019/12/20"
+output: html_document
+---
+
+```{r}
+library(GeneralizedHyperbolic)
+library(microbenchmark)
+#using c++
+library(Rcpp)
+dir_cpp <- '../Rcpp/'
+# Can create source file in Rstudio
+sourceCpp(paste0(dir_cpp,"rw.cpp"))
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+x0 <- 25
+rw1c <- rwMetropolisC(sigma[1], x0, N)
+rw2c <- rwMetropolisC(sigma[2], x0, N)
+rw3c <- rwMetropolisC(sigma[3], x0, N)
+rw4c <- rwMetropolisC(sigma[4], x0, N)
+rwc <- cbind(rw1c, rw2c, rw3c,  rw4c)
+par(mfrow=c(2,2)) 
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+for (j in 1:4) {
+  plot(rwc[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rwc[,j]))
+  abline(h=refline)
+}
+
+
+#using r
+set.seed(1234)
+lap_f = function(x) exp(-abs(x))
+rw.Metropolis = function(sigma, x0, N){
+  x = numeric(N)
+  x[1] = x0
+  u = runif(N)
+  k = 0
+  for (i in 2:N) {
+    y = rnorm(1, x[i-1], sigma)
+    if (u[i] <= (lap_f(y) / lap_f(x[i-1]))) x[i] = y 
+    else {
+      x[i] = x[i-1]
+      k = k+1
+    }
+  }
+  return(list(x = x, k = k))
+}
+
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+x0 <- 25
+rw1 <- rw.Metropolis(sigma[1], x0, N)
+rw2 <- rw.Metropolis(sigma[2], x0, N)
+rw3 <- rw.Metropolis(sigma[3], x0, N)
+rw4 <- rw.Metropolis(sigma[4], x0, N)
+par(mfrow=c(2,2))  #display 4 graphs together
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+rw <- cbind(rw1$x, rw2$x, rw3$x,  rw4$x)
+for (j in 1:4) {
+  plot(rw[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rw[,j]))
+  abline(h=refline)
+}
+
+##qqplot
+for (j in 1:4) {
+  qqplot(rwc[,j], rw[,j], xlab = 'rwc', ylab = 'rwr')
+  qqline(rwc[,j], col = 2)
+}
+
+## compare the computation time
+ts <- microbenchmark(rwR=rw.Metropolis(sigma[1], x0, N), rwC=rwMetropolisC(sigma[1], x0, N))
+summary(ts)[,c(1,3,5,6)]
+
+
+```
+
+we can get shorter calculation time using method rcpp.

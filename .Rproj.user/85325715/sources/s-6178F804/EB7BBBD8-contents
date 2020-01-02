@@ -1,0 +1,765 @@
+---
+title: "Introduction to sc19011"
+author: "Anran Liu"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to StatComp}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+## Overview
+sc19011 provides two function to estimate sparse matrix and linear regression with sparse matrices
+
+Sometimes, we get missing data, which is bad for fitting models. The mls function can fill in missing values, using local quadratic polynomial approximation.
+
+The source R code for mls is as follows:
+```{r,eval=TRUE}
+mls <-  function(data_temp){
+  b=0
+  x0 <- which(data == 0)
+  index <- seq(1,length(data_temp),1)/(length(data_temp))
+  x0=x0/(length(data_temp))
+  models <- function(x,theta){
+    matrix(theta, nrow = 1,ncol = 3, byrow = T)%*%matrix(c(1-x^2,2*x*(1-x),x^2), nrow = 3, ncol = length(x),byrow = T)
+  }
+  loss = function(theta, x, y){
+    sum(exp(-(x-x0)^2/0.4)*(y-models(x, theta))^2)
+  }
+  theta0 <- c(0, 0, 0, 0, 0, 0)
+  theta.L <- optim(theta0, loss, x=index, y=data_temp, method = "BFGS")
+  theta.L
+  models(x0,theta.L$`par`)
+  b = models(x0,theta.L$`par`)
+  return(b)
+}
+
+```
+
+For example
+We have a missing data in the sequence. Using mls function can give a value for the missing data, according to the neighborhood data.
+```{r}
+data <- c(1,2,3,0,3,2,1)
+mls(data)
+
+```
+
+
+
+The RSC function is used to estimate the rank of the regression coefficients.
+
+The source R code for JRRS is as follows:
+```{r,eval=TRUE}
+library(MASS)
+RSC <-  function(x,y){
+  p=ncol(x);nn=ncol(y) ;mm=min(nrow(x),nn)
+  M=t(x)%*%x
+  mpM=ginv(M) # M的MP逆
+  P=x%*%mpM%*%t(x)
+  V=as.matrix(eigen(t(y)%*%P%*%y)$vectors)
+  hatB=mpM%*%t(x)%*%y 
+  W=hatB%*%V
+  G=t(V)
+  k<- mm
+  hatBk<-array(0,dim=c(k,p,nn))
+  RSC<-rep(0,k-1)
+  mu=70
+  for(kk in 2:k){
+    #cat("rank=",kk,"\n")
+    Wk=W[,1:kk]
+    Gk=G[1:kk,]
+    hatBk[kk-1,,]=Wk%*%Gk
+    mse<-norm(y-x%*%hatBk[kk-1,,],type='F')^2
+    pen<-mu*kk
+    RSC[kk-1]<-mse+pen
+  }
+  rank<-which(RSC==min(RSC),arr.ind=TRUE)+1
+  return(rank)
+}
+```
+
+RSC will return the rank of the regression coefficients.
+
+For example
+
+In a linear model simulation, the data is sparse. RSC function can give the estimator of the rank for sparse regression coefficients.
+
+```{r,eval=TRUE}
+library(mvtnorm)
+J <- 15
+p <- 25
+n <- 25
+r=5
+m=100
+rho=0.1
+sigma=1
+b=0.4
+Sigma <- matrix(0, nrow = p, ncol = p)
+for (i in 1:p) {
+  for (j in 1:p) {
+    Sigma[i,j] <- rho^(abs(i-j))
+  }
+}
+X <- matrix(0,nrow = m, ncol = p)
+for (i in 1:m) {
+  X[i,] <- rmvnorm(1,mean = rep(0,p), sigma=Sigma)
+} 
+E <- matrix(0,nrow = m, ncol = n)
+for (i in 1:m) {
+  E[i,] <- rmvnorm(1,mean = rep(0,n), sigma=diag(n))
+} 
+B0 <- matrix(0,nrow = J, ncol = r)
+B1 <- matrix(0,nrow = r, ncol = n)
+for (i in 1:J) {
+  for (j in 1:r) {
+    B0[i,j] <- rnorm(1)
+  }
+}
+for (i in 1:r) {
+  for (j in 1:n) {
+    B1[i,j] <- rnorm(1)
+  }
+}
+A <- matrix(0, nrow = p, ncol = n)
+for (i in 1:J) {
+  for (j in 1:n) {
+    A[i,j] <- (b*B0%*%B1)[i,j]
+  }
+}
+Y <- t(t(X))%*%A+E
+
+RSC(X,Y)
+```
+
+## assignment1
+## Question3.4
+
+```{r}
+n <- 4000
+sigma <- 2
+f1 <- function(x){
+  x/sigma^2*exp(-0.5*x^2/sigma^2)
+}
+y <- runif(n)
+x <- sqrt(-2*sigma^2*log(1-y))   #Inverse function
+hist(x,prob = TRUE)
+s <- seq(0, 10, .1)
+lines(s,f1(s))
+```
+
+
+## Question3.11
+```{r}
+n <- 1e4
+X1 <- rnorm(n,0,1)
+X2 <- rnorm(n,3,1)
+i <- sample(c(0,1),n, replace = T, prob = c(0.25,0.75))
+Z1 <- i*X1+(1-i)*X2
+hist(Z1,prob = T)
+#p=0.5, produce bimodal mixtures
+i <- sample(c(0,1),n, replace = T)
+Z2 <- i*X1+(1-i)*X2
+hist(Z2,prob = T)
+
+```
+
+
+
+
+## Question3.18
+
+```{r}
+library(mvtnorm)
+n <- 10
+d <- 5
+A <- rmvnorm(d,rep(0,d),diag(1,d))
+A[upper.tri(A)] <- 0 
+for (i in 1:nrow(A)) {
+  A[i,i] <- rchisq(1,n-i+1)
+}
+sigma <- matrix(diag(3,d),nrow = 5)
+L <- chol(sigma)            
+X <- L%*%A%*%t(A)%*%t(L)   # Bartlett’s decomposition
+X
+```
+
+## assignment2
+## Question5.1
+
+```{r}
+m <- 1e4
+x <- runif(m,max = pi/3,min = 0)
+g <-function(x) {pi/3*sin(x)}
+theta <- sum(g(x))/m
+theta
+1-cos(pi/3) #true value
+```
+
+
+## Question5.10
+```{r}
+MC.Phi <- function(x, R = 10000, antithetic = TRUE) {
+  u <- runif(R/2,0,1)
+  if (!antithetic) v <- runif(R/2,0,1) else v <- 1 - u
+  u <- c(u, v)
+  for (i in 1:length(x)) {
+    g <- exp(-u)/(1+u^2)
+    theta <- mean(g)
+  }
+  theta
+}
+m <- 1000
+MC1 <- MC2 <- numeric(m)
+x <- 1
+for (i in 1:m) {
+  MC1[i] <- MC.Phi(x, R = 1000, anti = FALSE)
+  MC2[i] <- MC.Phi(x, R = 1000)
+}
+c(var(MC1),var(MC2),var(MC2)/var(MC1))
+
+```
+
+
+
+
+## Question5.15
+
+```{r}
+library(knitr)
+#Importance sampling
+u <- runif(m) 
+x <- - log(1 - u * (1 - exp(-1)))
+fg <- g(x) / (exp(-x) / (1 - exp(-1)))
+est_im_mean <- mean(fg)
+est_im_var <- var(fg)
+
+#stratified importance sampling
+M <- 10000
+k <- 5 #group number 
+r <- M/k #replicates per stratum
+N <- 50 #number of times to repeat the estimation
+theta <- NULL
+
+#divide interval
+inter <- rep(0,k)
+f <- function(x) -log(1-x*(1-exp(-1))) #Inverse function
+for (i in 1:k-1) {
+  inter[i] <- f(i/k)
+}
+inter[k] <- 1
+inter <- c(0,inter)
+
+#estimates 
+est <- NULL
+for (j in 1:N) {
+  g<-function(x) exp(-x)/(1+x^2)
+  for (i in 1:k) {
+    a <- inter[i]
+    b <- inter[i+1]
+    u=runif(m,a,b)
+    x=-log(1-u*(1-exp(-1)))
+    fg=g(x) / (1/(b-a)*exp(-x) / (1 - exp(-1)))
+    theta[i] <- mean(fg)
+  }
+  est[j] <- sum(theta)
+}
+#result
+c(mean(est), var(est))
+#comparison between 5.10 and 5.15
+c(est_im_mean,mean(est))
+c(est_im_var,var(est))
+
+```
+
+## assignment3
+## Question6.5
+
+```{r}
+n <- 20
+alpha <- 0.975
+UCL <- replicate(1000, expr = {
+  x <- rchisq(n,2)
+  est_min <- mean(x) - qt(0.975,n-1)*sd(x)/sqrt(n)
+  est_max <- mean(x) + qt(0.975,n-1)*sd(x)/sqrt(n)
+  est_max>2 & est_min<2
+} )
+mean(UCL) #coverage probability
+
+#example6.4
+n <- 20
+alpha <- .05
+UCL <- replicate(1000, expr = {
+  x <- rchisq(n, 2)
+  (n-1) * var(x) / qchisq(alpha, df = n-1)
+} )
+mean(UCL>4)  #coverage probability
+
+```
+
+
+## Question6.6
+```{r}
+b <- NULL
+n=1e4
+sk <- function(x) {
+  #computes sample skewness
+  xbar <- mean(x)
+  m3 <- mean((x - xbar)^3)
+  m2 <- mean((x - xbar)^2)
+  return( m3 / m2^1.5 )
+}
+num <- 1e2
+for (i in 1:num) {
+    x <- rnorm(n)
+    b[i] <- sk(x)
+}
+q <- c(0.025,0.05,0.95,0.975)  
+quantile(b,q)   #estimates
+f <- function(x){
+  f <- exp(-x^2/(12*(n-2)/((n+1)*(n+3))))/sqrt(2*pi*(6*(n-2)/((n+1)*(n+3))))
+}
+var_b <- q*(1-q)/(n*f(quantile(b,q))^2)
+var_b  #var of skewness
+
+cv <- qnorm(q, 0, sqrt(6/n)) # large sample approximation
+cv
+
+```
+
+## assignment4
+## Question6.7
+
+```{r}
+set.seed(233)
+pwr <- NULL
+sk <- function(x) {
+  #computes sample skewness
+  xbar <- mean(x)
+  m3 <- mean((x - xbar)^3)
+  m2 <- mean((x - xbar)^2)
+  return( m3 / m2^1.5 )
+}
+num <- 100  #Total number of samples
+repnum <- 1e4
+sktests <- numeric(repnum)
+cv <- qnorm(1-0.05/2, 0, sqrt(6*(num-2) / ((num+1)*(num+3))))
+
+#beta distribution
+for (i in 1:repnum) { #for each replicate
+  x <- rbeta(num, 2, 2)
+  sktests[i] <- as.integer(abs(sk(x)) >= cv)
+}
+pwr <- mean(sktests)
+pwr
+
+#t distribution
+for (i in 1:repnum) { 
+  x <- rt(num, 3)
+  sktests[i] <- as.integer(abs(sk(x)) >= cv)
+}
+pwr <- mean(sktests)
+pwr
+
+
+```
+
+
+## Question6.A
+```{r}
+n <- 200
+alpha <- .05
+mu0 <- 1
+m <- 10000 #number of replicates
+p <- matrix(NA, nrow = m, ncol = 3)
+for (j in 1:m) {
+  x <- rchisq(n, 1)
+  y <- runif(n,0,2)
+  z <- rexp(n,1)
+  ttest <- t.test(x, alternative = "two.sided", mu = mu0)
+  p[j,1] <- ttest$p.value
+  ttest <- t.test(y, alternative = "two.sided", mu = mu0)
+  p[j,2] <- ttest$p.value
+  ttest <- t.test(z, alternative = "two.sided", mu = mu0)
+  p[j,3] <- ttest$p.value
+}
+type1 <- apply(p < alpha, 2, mean)
+names(type1) <- c('chi-square','union','exp')
+#type1error
+type1
+
+```
+
+
+## Discussion
+
+(1)H0:power1=power2 $\leftrightarrow$
+H1:power1!=power2
+
+
+(2)McNemar test
+
+
+(3)True positive rate
+
+
+ We know power means we can get False negative rate, so we need True positive rate for McNemar test.
+
+## assignment6
+## Question7.8
+
+```{r}
+set.seed(123)
+library(bootstrap)
+lambda_hat <- eigen(cov(scor))$values
+theta_hat <- lambda_hat[1]/sum(lambda_hat)
+B <- 200
+# Jackknife
+theta_j <- rep(0,nrow(scor))
+for (i in 1:nrow(scor)) {
+  x <- scor [-i,]
+  lambda <- eigen(cov(x))$values
+  theta_j[i] <- lambda[1]/sum(lambda)
+}
+bias_jack <- mean(theta_j)-theta_hat
+se_jack <- sqrt(var(theta_j))
+#bias
+bias_jack
+# standard error
+se_jack
+
+```
+
+
+## Question7.10
+```{r}
+library(DAAG)
+attach(ironslag)
+set.seed(123)
+n <- length(magnetic) 
+e1 <- e2 <- e3 <- e4 <- numeric(n)
+rsq <- matrix(0,nrow = n, ncol = 4)
+# for n-fold cross validation
+# fit models on leave-one-out samples
+for (k in 1:n) {
+  y <- magnetic[-k]
+  x <- chemical[-k]
+  J1 <- lm(y ~ x)
+  yhat1 <- J1$coef[1] + J1$coef[2] * chemical[k]
+  e1[k] <- magnetic[k] - yhat1
+  rsq[k,1] <- summary(J1)$`adj.r.squared`
+  
+  J2 <- lm(y ~ x + I(x^2))
+  yhat2 <- J2$coef[1] + J2$coef[2] * chemical[k] +
+    J2$coef[3] * chemical[k]^2
+  e2[k] <- magnetic[k] - yhat2
+  rsq[k,2] <- summary(J2)$`adj.r.squared`
+  
+  J3 <- lm(log(y) ~ x)
+  logyhat3 <- J3$coef[1] + J3$coef[2] * chemical[k]
+  yhat3 <- exp(logyhat3)
+  e3[k] <- magnetic[k] - yhat3
+  rsq[k,3] <- summary(J3)$`adj.r.squared`
+  
+  J4 <- lm(y ~ x + I(x^2) + I(x^3))
+  yhat4 <- J4$coef[1] + J4$coef[2] * chemical[k] + 
+    J4$coef[3] * chemical[k]^2 + J4$coef[4] * chemical[k]^3
+  e4[k] <- magnetic[k] - yhat4
+  rsq[k,4] <- summary(J4)$`adj.r.squared`
+}
+error <- c(mean(e1^2), mean(e2^2), mean(e3^2), mean(e4^2))
+rsqu <- colMeans(rsq)
+cv_select<- matrix(c(error,rsqu),nrow = 2, ncol = 4, byrow = T, dimnames = list(c("error",'rsq'),
+                               c('model1','model2','model3','model4')))
+knitr::kable(cv_select)
+
+```
+
+According to the prediction error and adjusted $R^2$, Model 2, the quadratic model, would be the best fit for the data.
+
+
+
+
+## assignment8
+## Question9.4
+
+```{r}
+set.seed(1234)
+library(GeneralizedHyperbolic)
+rw.Metropolis <- function(n, sigma, x0, N) {
+  x <- numeric(N)
+  x[1] <- x0
+  u <- runif(N)
+  k <- 0
+  for (i in 2:N) {
+    y <- rnorm(1, x[i-1], sigma)
+    if (u[i] <= (dskewlap(y, mu = 0, alpha = 1, beta = 1) / dskewlap(x[i-1], mu = 0, alpha = 1, beta = 1)))
+      x[i] <- y  else {
+        x[i] <- x[i-1]
+        k <- k + 1
+      }
+  }
+  return(list(x=x, k=k))
+}
+
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+
+x0 <- 25
+rw1 <- rw.Metropolis(n, sigma[1], x0, N)
+rw2 <- rw.Metropolis(n, sigma[2], x0, N)
+rw3 <- rw.Metropolis(n, sigma[3], x0, N)
+rw4 <- rw.Metropolis(n, sigma[4], x0, N)
+
+par(mfrow=c(1,1))  #display 4 graphs together
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+rw <- cbind(rw1$x, rw2$x, rw3$x,  rw4$x)
+for (j in 1:4) {
+  plot(rw[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rw[,j]))
+  abline(h=refline)
+}
+
+#number of candidate points accepted
+print(1-c(rw1$k/N, rw2$k/N, rw3$k/N, rw4$k/N))
+
+```
+
+
+## assignment9
+## Question11.1
+
+```{r}
+x <- c(1:100)
+isTRUE(all.equal(log(exp(x)),exp(log(x))))
+isTRUE(log(exp(x)) == exp(log(x)))
+```
+
+## Question11.5
+```{r}
+a <- 1
+ck <- function(x,k){
+  sqrt(x^2*k/(k+1-x^2))
+}
+left <- function(x,k){
+  f <- function(u) {
+    (1+u^2/(k-1))^(-k/2)
+  }
+  2*gamma(k/2)/(sqrt(pi*(k-1))*gamma((k-1)/2))*integrate(f, lower=0, upper=ck(x,k-1))$value
+}
+
+g <- function(x,k){
+  left(x,k)-left(x,k+1)
+}
+
+uniroot(g,c(1,2), k=10)$`root`
+uniroot(g,c(1,2), k=25)$`root`
+uniroot(g,c(4,5), k=25)$`root`
+uniroot(g,c(1,2), k=100)$`root`
+
+```
+
+## Slides
+```{r}
+na <- 28
+nb <- 24
+noo <- 41
+nab <- 70
+n <- 163
+
+#max likelihood f
+logL <- function(theta){
+  p <- theta[1]
+  q <- theta[2]
+  r <- 1-q-p
+  ll <- 2*na*log(p)+2*nb*log(q)+2*noo*log(r)+nao*log(2*r/p)+nbo*log(2*r/q)+nab*log(2*p*q)
+  return(-ll)
+}
+# set p0
+theta <- c(0.1, 0.1)
+flag <- 1e-10
+Lold <- NULL
+Lold[1] <- 0
+for (i in 1:20) {
+  #E step
+  p <- theta[1]
+  q <- theta[2]
+  r <- 1-p-q
+  nao <- na*(2*r/(p+2*r)) 
+  nbo <- nb*(2*r/(q+2*r))
+  #M step
+  fit <- optim(c(0.1, 0.1), logL)
+  theta[1] <- fit$par[1]    #update p q
+  theta[2] <- fit$par[2]
+  Lold[i+1] <- logL(theta)   #the likelihood value
+  if (abs(Lold[i]-Lold[i+1]) < flag) break
+}
+theta #p & q
+plot(-Lold[-1])
+```
+
+
+I feel strange that the log-maximum likelihood values decrease.
+
+
+## assignment10
+## Page204.3
+
+```{r}
+formulas <- list(
+  mpg ~ disp,
+  mpg ~ I(1 / disp),
+  mpg ~ disp + wt,
+  mpg ~ I(1 / disp) + wt
+)
+for (x in formulas) {     #use for
+  print(lm(x,mtcars))
+}
+model1 <- lapply(formulas,lm,data = mtcars) #use lapply
+
+```
+
+## 4
+```{r}
+bootstraps <- lapply(1:10, function(i) {
+  rows <- sample(1:nrow(mtcars), rep = TRUE)
+  mtcars[rows, ]
+})
+
+model2 <- lapply(bootstraps, lm, formula = mpg ~ disp)   #use lapply
+for (x in bootstraps) {           #use for
+  print(lm(formula = mpg ~ disp,x))
+}
+
+```
+
+## 5
+```{r}
+rsq <- function(mod) summary(mod)$r.squared
+sapply(model1, rsq)
+sapply(model2, rsq)
+
+
+```
+
+
+#page214 3
+```{r}
+trials <- replicate(
+  100,
+  t.test(rpois(10, 10), rpois(7, 10)),
+  simplify = FALSE
+)
+sapply(trials, '[[', 3) 
+
+```
+
+#7
+```{r}
+library(devtools)
+library(parallelsugar)
+library(parallel)
+boot_df <- function(x) x[sample(nrow(x), rep = T), ]
+rsquared <- function(mod) summary(mod)$r.square
+boot_lm <- function(i) {
+  dat <- boot_df(mtcars)
+  rsquared(lm(mpg ~ wt + disp, data = dat))
+}
+n <- 1e2
+#system.time(mclapply(1:n, boot_lm, mc.cores = 4))
+
+mclapply(1:4, boot_lm, mc.cores = 1)
+mcsapply<- function(x,f,n){  #mcsapply function
+  unlist(mclapply(x,f,mc.cores = n))
+}
+mcsapply(1:4, boot_lm,1)
+unlist(mclapply(1:4, boot_lm, mc.cores = 1))
+
+```
+
+## assignment11
+
+
+```{r}
+library(GeneralizedHyperbolic)
+library(microbenchmark)
+#using c++
+library(Rcpp)
+dir_cpp <- '../src/'
+# Can create source file in Rstudio
+sourceCpp(paste0(dir_cpp,"rw.cpp"))
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+x0 <- 25
+rw1c <- rwMetropolisC(sigma[1], x0, N)
+rw2c <- rwMetropolisC(sigma[2], x0, N)
+rw3c <- rwMetropolisC(sigma[3], x0, N)
+rw4c <- rwMetropolisC(sigma[4], x0, N)
+rwc <- cbind(rw1c, rw2c, rw3c,  rw4c)
+par(mfrow=c(1,1)) 
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+for (j in 1:4) {
+  plot(rwc[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rwc[,j]))
+  abline(h=refline)
+}
+
+
+#using r
+set.seed(1234)
+lap_f = function(x) exp(-abs(x))
+rw.Metropolis = function(sigma, x0, N){
+  x = numeric(N)
+  x[1] = x0
+  u = runif(N)
+  k = 0
+  for (i in 2:N) {
+    y = rnorm(1, x[i-1], sigma)
+    if (u[i] <= (lap_f(y) / lap_f(x[i-1]))) x[i] = y 
+    else {
+      x[i] = x[i-1]
+      k = k+1
+    }
+  }
+  return(list(x = x, k = k))
+}
+
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+x0 <- 25
+rw1 <- rw.Metropolis(sigma[1], x0, N)
+rw2 <- rw.Metropolis(sigma[2], x0, N)
+rw3 <- rw.Metropolis(sigma[3], x0, N)
+rw4 <- rw.Metropolis(sigma[4], x0, N)
+par(mfrow=c(1,1))  #display 4 graphs together
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+rw <- cbind(rw1$x, rw2$x, rw3$x,  rw4$x)
+for (j in 1:4) {
+  plot(rw[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rw[,j]))
+  abline(h=refline)
+}
+
+##qqplot
+for (j in 1:4) {
+  qqplot(rwc[,j], rw[,j], xlab = 'rwc', ylab = 'rwr')
+  qqline(rwc[,j], col = 2)
+}
+
+## compare the computation time
+ts <- microbenchmark(rwR=rw.Metropolis(sigma[1], x0, N), rwC=rwMetropolisC(sigma[1], x0, N))
+summary(ts)[,c(1,3,5,6)]
+
+
+```
+
+we can get shorter calculation time using method rcpp.
+
+
+
+
+
+

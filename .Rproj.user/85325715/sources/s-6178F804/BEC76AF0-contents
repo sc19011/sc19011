@@ -1,0 +1,223 @@
+
+library(mvtnorm)
+library(gglasso)
+library(rrpack)
+library(SGL)
+library(msgl)
+library(grpreg)
+# set parameters
+J <- 15
+p <- 25
+n <- 25
+r=5
+m=100
+rho=0.1
+sigma=1
+b=0.4
+Sigma <- matrix(0, nrow = p, ncol = p)
+for (i in 1:p) {
+  for (j in 1:p) {
+    Sigma[i,j] <- rho^(abs(i-j))
+  }
+}
+X <- matrix(0,nrow = m, ncol = p)
+for (i in 1:m) {
+  X[i,] <- rmvnorm(1,mean = rep(0,p), sigma=Sigma)
+} 
+E <- matrix(0,nrow = m, ncol = n)
+for (i in 1:m) {
+  E[i,] <- rmvnorm(1,mean = rep(0,n), sigma=diag(n))
+} 
+B0 <- matrix(0,nrow = J, ncol = r)
+B1 <- matrix(0,nrow = r, ncol = n)
+for (i in 1:J) {
+  for (j in 1:r) {
+    B0[i,j] <- rnorm(1)
+  }
+}
+for (i in 1:r) {
+  for (j in 1:n) {
+    B1[i,j] <- rnorm(1)
+  }
+}
+A <- matrix(0, nrow = p, ncol = n)
+for (i in 1:J) {
+  for (j in 1:n) {
+    A[i,j] <- (b*B0%*%B1)[i,j]
+  }
+}
+Y <- t(t(X))%*%A+E
+data1 <- cbind(Y,X)
+y<-as.matrix(scale(data1[,1:25],center=T,scale=F))
+x<-as.matrix(scale(data1[,26:50]))
+
+
+
+## JRRS
+library(rrpack)
+library(Matrix)
+
+data=read.table("D:/线性统计模型/paper.NorskeSkogRRR.txt")
+y<-as.matrix(scale(data[,1:13],center=T,scale=F))
+x<-as.matrix(scale(data[,14:22]))
+const<-3
+# r is the rank of A, p is ncols of X, nn is ncols of Y
+# model is Y=XA+E
+r=nrow(x);p=ncol(x);nn=ncol(y) ;mm=nrow(x)
+jrrs<-rep(0,r+6)
+ccc<-array(0,dim=c((r+6),p,nn))
+# 提前把lambda做好
+for(ii in 1:(r+6)){
+  cat("rank=",ii,"\n")
+  # 利用glasso在秩限制下计算出拟合的矩阵
+  ffiitt<-srrr(Y=y,X=x,nrank=ii,method='glasso',ic.type='BIC')
+  ccc[ii,,]<-ffiitt$coef
+  # 以下三行为sigma^2求法
+  r.max<-min(nn,p/2,mm-1)
+  p0.max=min(p/2,mm/2)
+  s<-norm(y-x%*%ccc[ii,,],type='F')^2/(mm*nn-(nn+p0.max-r.max)*r.max)
+  s <- 1
+  # JRRS1算法, ii is rank(B)
+  mse<-norm(y-x%*%ccc[ii,,],type='F')^2
+  #j<-sum(apply(ccc[ii,,],1,sum)!=0)
+  j <-15
+  pen<-const*s^2*ii*(2*nn+log(2*exp(1))*j+j*log(exp(1)*p/j))
+  jrrs[ii]<-mse+pen
+}
+# 寻找jrrs1最小值即最小的估计B，idx为最小的jrrs1的对应的秩
+idx<-which(jrrs==min(jrrs),arr.ind=TRUE) 
+cat("idx=",idx,"\n")
+# 此为得到的最合适的B估计
+ccc[idx,,]<-srrr(Y=y,X=x,nrank=idx,method='glasso',ic.type='BIC')$coef
+Best <- srrr(Y=y,X=x,nrank=1,method='glasso',ic.type='BIC')$coef
+#View(srrr(Y=y,X=x,nrank=1,method='glasso',ic.type='BIC')$coef)
+rankMatrix(Best)
+sum(apply(Best,1,sum)!=0)
+norm(x%*%A-x%*%Best)^2/(m*n)
+
+## GLASSO
+Best <- srrr(Y=y,X=x,nrank=10,method='glasso',ic.type='BIC')$coef
+rankMatrix(Best)
+sum(apply(Best,1,sum)!=0)
+
+
+## RSC
+library(MASS)
+data=read.table("D:/线性统计模型/paper.NorskeSkogRRR.txt")
+# 对数据response做中心化，predictor做标准化
+y<-as.matrix(scale(data[,1:13],center=T,scale=F) )
+x<-as.matrix(scale(data[,14:22],center=T,scale=T))
+p=ncol(x);nn=ncol(y) ;mm=nrow(x)
+M=t(x)%*%x
+mpM=ginv(M) # M的MP逆
+P=x%*%mpM%*%t(x)
+V=as.matrix(eigen(t(y)%*%P%*%y)$vectors)
+hatB=mpM%*%t(x)%*%y 
+W=hatB%*%V
+G=t(V)
+k<- 10
+hatBk<-array(0,dim=c(k,p,nn))
+RSC<-rep(0,k-1)
+mu=20
+for(kk in 2:k){
+  cat("rank=",kk,"\n")
+  Wk=W[,1:kk]
+  Gk=G[1:kk,]
+  hatBk[kk-1,,]=Wk%*%Gk
+  mse<-norm(y-x%*%hatBk[kk-1,,],type='F')^2
+  pen<-mu*kk
+  RSC[kk-1]<-mse+pen
+}
+rank<-which(RSC==min(RSC),arr.ind=TRUE)+1
+cat("rank=",rank,"\n")
+B=hatBk[rank-1,,]
+sum(apply(B,1,sum)!=0)
+
+
+##RCGL
+data=read.table("D:/线性统计模型/paper.NorskeSkogRRR.txt")
+y<-as.matrix(scale(data[,1:13]))
+x<-as.matrix(scale(data[,14:22]))
+const<-3
+# r is the rank of A, p is ncols of X, nn is ncols of Y
+# model is Y=XA+E
+r=2;p=ncol(x);nn=ncol(y) ;mm=nrow(data)
+ccc<-array(0,dim=c((r+6),p,nn))
+k=9
+jrrs<-rep(0,k)
+# 提前把lambda做好
+SIGMA <- t(x)%*%x/mm
+lambda1 <- eigen(SIGMA)$'value'[1]
+s=1
+const<-3
+lambda <- const*s*sqrt(lambda1*k*mm*log(exp(1)*p))
+#lambda <- 10
+for(ii in 1:k){
+  cat("rank=",ii,"\n")
+  V <- diag(1,nn,nn)[,1:k]
+  FB = NULL
+  FB[1] = 0
+  for (j in 2:100) {
+    M=t(x)%*%x+lambda*diag(1,p,p)
+    mpM=ginv(M) # M的MP逆
+    #S <- mpM%*%t(x)%*%y%*%V
+    S <- srrr(Y=y%*%V,X=x,nrank=ii,method='glasso',ic.type='AIC')$coef
+    W=t(y)%*%x%*%S
+    V = svd(W)$u%*%svd(W)$v
+    B = S%*%t(V)
+    FB[j] = 0.5*norm(y-x%*%B,type='F')^2+norm(B)*lambda
+    if(abs(FB[j]-FB[j-1])<1e-4) break
+  }
+
+}
+# 寻找jrrs1最小值即最小的估计B，idx为最小的jrrs1的对应的秩
+idx<-which(jrrs==min(jrrs),arr.ind=TRUE) 
+cat("idx=",idx,"\n")
+# 此为得到的最合适的B估计
+ccc[idx,,]<-srrr(Y=y,X=x,nrank=idx,method='glasso',ic.type='BIC')$coef
+Best <- srrr(Y=y,X=x,nrank=idx,method='glasso',ic.type='AIC')$coef
+#View(srrr(Y=y,X=x,nrank=1,method='glasso',ic.type='BIC')$coef)
+rankMatrix(Best)
+sum(apply(Best,1,sum)!=0)
+Best
+mse<-norm(y-x%*%Best,type='F')^2/(m*n)
+mse
+
+## GLASSO
+data=read.table("D:/线性统计模型/paper.NorskeSkogRRR.txt")
+y<-as.matrix(scale(data[,1:13],center=T,scale=F))
+x<-as.matrix(scale(data[,14:22]))
+y<-as.matrix(data[,1:13])
+x<-as.matrix(data[,14:22])
+data1 <- list(x=X, y=Y)
+
+# define group index
+group <- rep(1:9)
+cvFit=cvSGL(data=data1,index=group,type="linear")
+cvFit=SGL(data=data1,type="linear")
+cvFit$lambdas
+cvFit$fit$beta
+beta=cvFit$fit$beta
+idx = 11
+data.frame(Variables=colnames(X),Coefficients=beta[,idx])
+
+fit <- grpreg(x, y, group=c(1,1,1,2,2,1,3,3,3),nlambda = 200, penalty="grLasso")
+fit <- grpreg(x, y, group=1:ncol(x),nlambda = 200, penalty="grLasso")
+fit <- grpreg(x, y, group=1:ncol(x),lambda = 2, penalty="grLasso")
+
+fit$beta[,-1,41]
+fit$beta
+fit$lambda
+fit$loss
+sum(apply(fit$beta[,-1,41],2,sum)!=0)
+sum(apply(fit$beta[,-1,100],2,sum)!=0)
+View(fit$beta[,-1,21])
+norm(x%*%A-x%*%fit$beta[,-1,41])^2/(m*n)
+
+
+
+
+
+
+
+

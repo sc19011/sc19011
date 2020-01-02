@@ -1,0 +1,269 @@
+library(gdata)
+library(ROCR)
+library(bcpa)
+library(adehabitatLT)
+library(chron)
+library(sp)
+library(rgdal)
+library(lubridate)
+
+perl <- "C:/strawberry/perl/bin/perl5.28.1.exe"
+data <- read.csv('C:/Users/chong9/.spyder-py3/TCN/subdata.csv', stringsAsFactors = FALSE)
+data <- data[,-14]
+
+data1 <- data[,c(2, 11, 12, 13)]
+data2 <- data
+data2$index <- c(1:nrow(data2))
+mytrack <- MakeTrack(data2017$Longitude, data2017$Latitude, data2017$UTC_datetime)
+data2017[c(2:(nrow(data2017)-1)),]$V <- GetVT(mytrack)$V
+
+for(i in 1:nrow(data2)){
+  data_temp <- data2
+  if(data_temp[i, ]$Latitude == 0){
+    if(i+20 > nrow(data2)) data_temp <- data2[seq(i-20,nrow(data2),1), ]
+    else data_temp <- data2[seq(i-20,i+20,1), ]
+    data_temp$index <- seq(0,nrow(data_temp)-1,1)/(nrow(data_temp)-1)
+    data2[i,4] <- mls_height(data_temp[21,]$index)
+  }
+}
+x <- data2[data2$Longitude == 0, c(4,5)]
+hist(x$Altitude_m, freq = F, xlim = c(-100, 3000), breaks = c(min(x$Altitude_m),seq(-200, 1400, 200),max(x$Altitude_m)))
+
+mytrack <- MakeTrack(data1$Longitude, data1$Latitude, data1$UTC_datetime)
+plot(mytrack)
+
+data2$UTC_datetime <- as.POSIXct(data2$UTC_datetime, tryFormats = c("%Y-%m-%d %H:%M:%OS"))
+
+# 2017 data
+data2017 <- data2[year(data2$UTC_datetime)== 2017, ]
+data2017 <- data2017[data2017$Latitude != 0, ]
+for (i in 2:nrow(data2017)) {
+  if(data2017[i-1,]$speed_km_h >= 10 & data2017[i,]$speed_km_h >= 10) data2017[i,]$fl <- 1
+  else  data2017[i,]$fl <- 0
+} 
+sum(data2017$fl == 1)
+data17fly <- data2017[data2017$fl == 1, ]
+data17fly <- data2017[c(8000:15110), ]
+data17fly <-  data17fly[data17fly$Altitude_m >= 400, ]
+data17fly <-  data17fly[data17fly$Latitude !=0, ]
+for (i in 2:(nrow(data17fly)-1)) {
+  if(data17fly[i+1,]$index-data17fly[i,]$index> 50 & data17fly[i,]$index-data17fly[i-1,]$index> 50 ){
+    data17fly[-i,]
+    }
+}
+data17fly$flag <- rbinom(nrow(data17fly),1,0.8)
+loss <- rep(0,nrow(data17fly[data17fly$flag == 0,]))
+b=0
+total =0
+h=0
+for (i in 20:nrow(data17fly)) {
+  if(data17fly[i,]$flag == 0){
+    data_temp <- data17fly
+    if(i+20 > nrow(data17fly)) data_temp <- data17fly[seq(i-10,nrow(data17fly),1), ]
+    else data_temp <- data17fly[seq(i-10,i+10,1), ]
+    la <- floor(data_temp$Latitude)
+    lo <- floor(data_temp$Longitude)
+    data_temp$Latitude <- data_temp$Latitude-la
+    data_temp$Longitude <- data_temp$Longitude-lo
+    data_temp$index <- (data_temp$index-data_temp[1,]$index) /(data_temp[nrow(data_temp),]$index-data_temp[1,]$index)
+    a <- mls(data_temp[11,]$index)
+    b=b+1 
+    h=sin((data_temp[11,2]-a[1])/360*pi)^2+cos(data17fly[i,2]/180*pi)*cos((a[1]+la[1])/180*pi)*sin((data_temp[11,3]-a[2])/360*pi)^2
+    loss[b] <- 6371*2*asin(sqrt(h))
+    total = total + loss[b]
+    if(is.nan(loss[b]) == T) break
+  }
+}
+#bias for height
+data17fly <- data17fly[data17fly$Altitude_m != 0,]
+for (i in 20:nrow(data17fly)) {
+  if(data17fly[i,]$flag == 0){
+    data_temp <- data17fly
+    if(i+20 > nrow(data17fly)) data_temp <- data17fly[seq(i-10,nrow(data17fly),1), ]
+    else data_temp <- data17fly[seq(i-10,i+10,1), ]
+    #data_temp <- data_temp[data_temp$index-data17fly[i,]$index< 200,]
+    #data_temp <- data_temp[data_temp$index-data17fly[i,]$index> -200,]
+    #x0 = data17fly[i,]$index
+    data_temp$index <- (data_temp$index-data_temp[1,]$index) /(data_temp[nrow(data_temp),]$index-data_temp[1,]$index)
+    a <- mls_height(data_temp[11,]$index)
+    b=b+1
+    loss[b] <- (data17fly[i,4]-a)^2
+    total = total + loss[b]
+    if(loss[b]>= 100000) break
+  }
+}
+
+mytrack <- MakeTrack(data17fly[data17fly$Latitude != 0, ]$Longitude, data17fly[data17fly$Latitude != 0, ]$Latitude, data17fly[data17fly$Latitude != 0, ]$UTC_datetime)
+plot(mytrack)
+
+for (i in 20:nrow(data17fly)) {
+  if(data17fly[i,]$flag == 0){
+    data_temp <- data17fly
+    if(i+20 > nrow(data17fly)) data_temp <- data17fly[seq(i-10,nrow(data17fly),1), ]
+    else data_temp <- data17fly[seq(i-10,i+10,1), ]
+    la <- floor(data_temp$Latitude)
+    lo <- floor(data_temp$Longitude)
+    data_temp$Latitude <- data_temp$Latitude-la
+    data_temp$Longitude <- data_temp$Longitude-lo
+    data_temp$index <- (data_temp$index-data_temp[1,]$index) /(data_temp[nrow(data_temp),]$index-data_temp[1,]$index)
+    a <- mls(data_temp[11,]$index)
+    data_temp[11, 2] <- a[1]+la[1]
+    data_temp[11, 3] <- a[2]+lo[1]
+    points(data_temp[11, c(3,2)], col = 'red', pch = 18)
+  }
+}
+mse=total/b
+mse
+sqrt(mse)
+length(loss)
+hist(loss)
+max(loss)
+hist(loss[loss<=1], xlim = c(0,1), breaks = seq(0,2,0.05), main = 'loss')
+hist(loss[loss<=0.5], xlim = c(0,0.5), breaks = seq(0,1,0.05), main = 'loss')
+
+# deal with 2017
+for (i in 20:nrow(data17fly)) {
+  if(data17fly[i,]$Latitude == 0){
+    data_temp <- data17fly
+    if(i+20 > nrow(data17fly)) data_temp <- data17fly[seq(i-10,nrow(data17fly),1), ]
+    else data_temp <- data17fly[seq(i-10,i+10,1), ]
+    data_temp<- data_temp[data_temp$Latitude!=0,]
+    la <- floor(data_temp$Latitude)
+    lo <- floor(data_temp$Longitude)
+    data_temp$Latitude <- data_temp$Latitude-la
+    data_temp$Longitude <- data_temp$Longitude-lo
+    data_temp$index <- (data_temp$index-data_temp[1,]$index) /(data_temp[nrow(data_temp),]$index-data_temp[1,]$index)
+    a <- mls(data_temp[11,]$index)
+    data_temp[11, 2] <- a[1]+la[1]
+    data_temp[11, 3] <- a[2]+lo[1]
+  }
+}
+
+write.csv(data17fly,"C:/Users/chong9/.spyder-py3/TCN/data_17fly.csv")
+
+data2017 <- data2017[data2017$Latitude != 0, ]
+mytrack <- MakeTrack(data17fly$Longitude, data17fly$Latitude, data17fly$UTC_datetime)
+plot(mytrack)
+
+data2017 <- data2[year(data2$UTC_datetime)== 2017, ]
+data2018 <- data2[year(data2$UTC_datetime)== 2018, ]
+data2019 <- data2[year(data2$UTC_datetime)== 2019, ]
+
+# 2018 data
+data18fly <- data2018[c(51125:59900), ]
+data18fly <- data18fly[data18fly$Latitude !=0 ,]
+data18fly$flag <- rbinom(nrow(data18fly),1,0.8)
+loss <- rep(0,nrow(data17fly[data17fly$flag == 0,]))
+b=0
+total =0
+h=0
+for (i in 20:nrow(data18fly)) {
+  if(data18fly[i,]$flag == 0){
+    data_temp <- data18fly
+    if(i+20 > nrow(data18fly)) data_temp <- data18fly[seq(i-10,nrow(data2018),1), ]
+    else data_temp <- data18fly[seq(i-10,i+10,1), ]
+    la <- floor(data_temp$Latitude)
+    lo <- floor(data_temp$Longitude)
+    data_temp$Latitude <- data_temp$Latitude-la
+    data_temp$Longitude <- data_temp$Longitude-lo
+    data_temp$index <- (data_temp$index-data_temp[1,]$index) /(data_temp[nrow(data_temp),]$index-data_temp[1,]$index)
+    a <- mls(data_temp[11,]$index)
+    b=b+1 
+    h=sin((data_temp[11,'Longitude']-a[1])/360*pi)^2+cos(data18fly[i,'Latitude']/180*pi)*cos((a[1]+la[1])/180*pi)*sin((data_temp[11,'Latitude']-a[2])/360*pi)^2
+    loss[b] <- 6371*2*asin(sqrt(h))
+    total = total + loss[b]
+    if(is.nan(loss[b]) == T) break
+  }
+}
+for (i in 20:nrow(data18fly)) {
+  if(data18fly[i,]$Latitude == 0){
+    data_temp <- data18fly
+    if(i+20 > nrow(data18fly)) data_temp <- data18fly[seq(i-10,nrow(data2018),1), ]
+    else data_temp <- data18fly[seq(i-10,i+10,1), ]
+    la <- floor(data_temp$Latitude)
+    lo <- floor(data_temp$Longitude)
+    data_temp$Latitude <- data_temp$Latitude-la
+    data_temp$Longitude <- data_temp$Longitude-lo
+    data_temp$index <- (data_temp$index-data_temp[1,]$index) /(data_temp[nrow(data_temp),]$index-data_temp[1,]$index)
+    a <- mls(data_temp[11,]$index)
+    data18fly[i,'Latitude'] <- la+a[2]
+    data18fly[i,'Longitude'] <- lo+a[1]
+  }
+}
+write.csv(data18fly,"C:/Users/chong9/.spyder-py3/TCN/data18fly.csv")
+
+
+for(i in 1:nrow(data2019)){
+  data_temp <- data2019
+  if(data_temp[i, ]$Latitude == 0){
+    if(i+20 > nrow(data2019)) data_temp <- data2019[seq(i-20,nrow(data2019),1), ]
+    else data_temp <- data2019[seq(i-20,i+20,1), ]
+    data_temp$index <- seq(0,nrow(data_temp)-1,1)/(nrow(data_temp)-1)
+    data2019[i,c(2,3)] <- mls(data_temp[21,]$index)
+    data2019[i,4] <- mls_height(data_temp[21,]$index)
+    break
+  }
+}
+
+for(i in 1:nrow(data2019)){
+  a=sum(data2019[i,]$Latitude == 0)
+}
+a
+data_temp1 <- data2017[data2017$Altitude_m == 0, ]
+
+write.csv(data17fly,"C:/Users/chong9/.spyder-py3/TCN/data2017fly.csv")
+write.csv(data2018,"C:/Users/chong9/.spyder-py3/TCN/data2018.csv")
+write.csv(data2019,"C:/Users/chong9/.spyder-py3/TCN/data2019.csv")
+write.csv(data2,"C:/Users/chong9/.spyder-py3/TCN/data2.csv")
+
+data_temp1 <- data_temp[data_temp$Latitude != 0, ]
+data_temp$index <- seq(1,length(data_temp$UTC_datetime),1)
+mytrack <- MakeTrack(data_temp1$Longitude, data_temp1$Latitude, data_temp1$UTC_datetime)
+plot(mytrack)
+points(data_temp[20, c(3,2)], col = 'red', pch = 20)
+points(data2017[i,c(3,2)], col = 'blue', pch = 20) 
+points(data_temp[23, c(3,2)], col = 'green', pch = 20)
+line()
+
+#mls插值(求导)
+
+#mls插值
+mls <-  function(x0){
+  a=0
+  models <- function(x,theta){
+    matrix(theta, nrow = 2,ncol = 3, byrow = T)%*%matrix(c(1-x^2,2*x*(1-x),x^2), nrow = 3, ncol = length(x),byrow = T)
+  }
+  loss = function(theta, x, y){
+    exp(-(x-x0)^2/0.09)%*%sqrt(apply((t(y)-models(x, theta))^2,2,sum))
+  }
+  theta0 <- c(0, 0, 0, 0, 0, 0)
+  theta.L <- optim(theta0, loss, x=data_temp[data_temp[-x0,]$Longitude != 0, ]$index, 
+                 y=data_temp[data_temp[-x0,]$Latitude != 0, c('Longitude','Latitude')], method = "BFGS")
+  theta.L
+  models(x0,theta.L$`par`)
+  a = models(x0,theta.L$`par`)
+  return(a)
+}
+
+mls_height <-  function(x0){
+  b=0
+  models <- function(x,theta){
+    matrix(theta, nrow = 1,ncol = 3, byrow = T)%*%matrix(c(1-x^2,2*x*(1-x),x^2), nrow = 3, ncol = length(x),byrow = T)
+  }
+  loss = function(theta, x, y){
+    sum(exp(-(x-x0)^2/0.09)*(y-models(x, theta))^2)
+  }
+  theta0 <- c(0, 0, 0, 0, 0, 0)
+  theta.L <- optim(theta0, loss, x=data_temp[data_temp$Longitude != 0, ]$index, 
+                   y=data_temp[data_temp$Latitude != 0, ]$Altitude_m, method = "BFGS")
+  theta.L
+  models(x0,theta.L$`par`)
+  b = models(x0,theta.L$`par`)
+  return(b)
+}
+
+
+
+
+
+
