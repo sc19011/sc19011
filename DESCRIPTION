@@ -7,7 +7,7 @@ Author: Anran Liu
 Maintainer: Anran Liu <liuanran@mail.ustc.edu.cn>
 Description: Several R function are included in this package for illustration. 
 License: GPL (>= 2)
-Imports: Rcpp (>= 0.12.16), knitr, rmarkdown,rrpack, MASS, mvtnorm, DAAG, GeneralizedHyperbolic,bootstrap, devtools,parallelsugar,microbenchmark
+Imports: Rcpp (>= 0.12.16), knitr, rmarkdown,rrpack, MASS, mvtnorm, DAAG, GeneralizedHyperbolic,bootstrap, devtools,microbenchmark
 LinkingTo: Rcpp
 RoxygenNote: 7.0.2
 VignetteBuilder: knitr
