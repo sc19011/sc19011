@@ -11,5 +11,6 @@ Imports: Rcpp (>= 0.12.16), knitr, rmarkdown,rrpack, MASS, mvtnorm, DAAG, Genera
 LinkingTo: Rcpp
 RoxygenNote: 7.0.2
 VignetteBuilder: knitr
+Encoding: UTF-8
 URL: http://github.com/sc19011/sc19011
 BugReports: http://github.com/sc19011/sc19011/issues

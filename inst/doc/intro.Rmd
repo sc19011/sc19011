@@ -4,7 +4,7 @@ author: "Anran Liu"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Introduction to StatComp}
+  %\VignetteIndexEntry{Introduction to sc19011}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---

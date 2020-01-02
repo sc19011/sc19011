@@ -3,7 +3,7 @@
         "definitions" : [
             {
                 "column" : 15,
-                "file" : "D:/statcomp/src/rw.cpp",
+                "file" : "D:/sc19011/src/rw.cpp",
                 "kind" : 6,
                 "line" : 19,
                 "name" : "rwMetropolisC(double, double, int)",
@@ -11,7 +11,7 @@
                 "usr" : "c:@F@rwMetropolisC#d#d#I#"
             }
         ],
-        "file" : "D:/statcomp/src/rw.cpp",
+        "file" : "D:/sc19011/src/rw.cpp",
         "file_last_write" : 1577946238.000000
     }
 ]
