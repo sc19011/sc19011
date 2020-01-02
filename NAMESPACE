@@ -2,6 +2,7 @@
 
 export(RSC)
 export(mls)
+export(rwMetropolisC)
 import(MASS)
 import(rrpack)
 useDynLib(sc19011)

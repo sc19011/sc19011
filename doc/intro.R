@@ -1,24 +1,5 @@
----
-title: "Introduction to sc19011"
-author: "Anran Liu"
-date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{Introduction to sc19011}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
----
-
-## Overview
-sc19011 provide function to deal with linear regression with sparse matrices and fill in missing data.
-
-## mls
-
-Sometimes, we get missing data, which is bad for fitting models. The mls function can fill in missing values, using local quadratic polynomial approximation.
-
-The source R code for mls is as follows:
-```{r,eval=TRUE}
-mls <-  function(data_temp){
+## ----eval=TRUE-----------------------------------------------------------
+mls <-  function(data_temp,sigma){
   b=0
   x0 <- which(data == 0)
   index <- seq(1,length(data_temp),1)/(length(data_temp))
@@ -27,7 +8,7 @@ mls <-  function(data_temp){
     matrix(theta, nrow = 1,ncol = 3, byrow = T)%*%matrix(c(1-x^2,2*x*(1-x),x^2), nrow = 3, ncol = length(x),byrow = T)
   }
   loss = function(theta, x, y){
-    sum(exp(-(x-x0)^2/0.4)*(y-models(x, theta))^2)
+    sum(exp(-(x-x0)^2/sigma)*(y-models(x, theta))^2)
   }
   theta0 <- c(0, 0, 0, 0, 0, 0)
   theta.L <- optim(theta0, loss, x=index, y=data_temp, method = "BFGS")
@@ -37,27 +18,18 @@ mls <-  function(data_temp){
   return(b)
 }
 
-```
 
-For example
-We have a missing data in the sequence. Using mls function can give a value for the missing data, according to the neighborhood data.
-```{r}
+## ------------------------------------------------------------------------
 data <- c(1,2,3,0,3,2,1)
-mls(data)
+mls(data,0.5)
 
-```
 
-## RSC
-
-The RSC function is used to estimate the rank of the regression coefficients.
-
-The source R code for JRRS is as follows:
-```{r,eval=TRUE}
+## ----eval=TRUE-----------------------------------------------------------
 library(MASS)
 RSC <-  function(x,y){
   p=ncol(x);nn=ncol(y) ;mm=min(nrow(x),nn)
   M=t(x)%*%x
-  mpM=ginv(M) # Mçš„MPé€†
+  mpM=ginv(M) # MµÄMPÄæ
   P=x%*%mpM%*%t(x)
   V=as.matrix(eigen(t(y)%*%P%*%y)$vectors)
   hatB=mpM%*%t(x)%*%y 
@@ -79,15 +51,8 @@ RSC <-  function(x,y){
   rank<-which(RSC==min(RSC),arr.ind=TRUE)+1
   return(rank)
 }
-```
 
-RSC will return the rank of the regression coefficients.
-
-For example
-
-In a linear model simulation, the data is sparse. RSC function can give the estimator of the rank for sparse regression coefficients.
-
-```{r,eval=TRUE}
+## ----eval=TRUE-----------------------------------------------------------
 library(mvtnorm)
 J <- 15
 p <- 25
@@ -132,12 +97,8 @@ for (i in 1:J) {
 Y <- t(t(X))%*%A+E
 
 RSC(X,Y)
-```
 
-## assignment1
-## Question3.4
-
-```{r}
+## ------------------------------------------------------------------------
 n <- 4000
 sigma <- 2
 f1 <- function(x){
@@ -148,11 +109,8 @@ x <- sqrt(-2*sigma^2*log(1-y))   #Inverse function
 hist(x,prob = TRUE)
 s <- seq(0, 10, .1)
 lines(s,f1(s))
-```
 
-
-## Question3.11
-```{r}
+## ------------------------------------------------------------------------
 n <- 1e4
 X1 <- rnorm(n,0,1)
 X2 <- rnorm(n,3,1)
@@ -164,14 +122,8 @@ i <- sample(c(0,1),n, replace = T)
 Z2 <- i*X1+(1-i)*X2
 hist(Z2,prob = T)
 
-```
 
-
-
-
-## Question3.18
-
-```{r}
+## ------------------------------------------------------------------------
 library(mvtnorm)
 n <- 10
 d <- 5
@@ -182,25 +134,18 @@ for (i in 1:nrow(A)) {
 }
 sigma <- matrix(diag(3,d),nrow = 5)
 L <- chol(sigma)            
-X <- L%*%A%*%t(A)%*%t(L)   # Bartlettâ€™s decomposition
+X <- L%*%A%*%t(A)%*%t(L)   # Bartlett¡¯s decomposition
 X
-```
 
-## assignment2
-## Question5.1
-
-```{r}
+## ------------------------------------------------------------------------
 m <- 1e4
 x <- runif(m,max = pi/3,min = 0)
 g <-function(x) {pi/3*sin(x)}
 theta <- sum(g(x))/m
 theta
 1-cos(pi/3) #true value
-```
 
-
-## Question5.10
-```{r}
+## ------------------------------------------------------------------------
 MC.Phi <- function(x, R = 10000, antithetic = TRUE) {
   u <- runif(R/2,0,1)
   if (!antithetic) v <- runif(R/2,0,1) else v <- 1 - u
@@ -220,14 +165,8 @@ for (i in 1:m) {
 }
 c(var(MC1),var(MC2),var(MC2)/var(MC1))
 
-```
 
-
-
-
-## Question5.15
-
-```{r}
+## ------------------------------------------------------------------------
 library(knitr)
 #Importance sampling
 u <- runif(m) 
@@ -272,12 +211,8 @@ c(mean(est), var(est))
 c(est_im_mean,mean(est))
 c(est_im_var,var(est))
 
-```
 
-## assignment3
-## Question6.5
-
-```{r}
+## ------------------------------------------------------------------------
 n <- 20
 alpha <- 0.975
 UCL <- replicate(1000, expr = {
@@ -297,11 +232,8 @@ UCL <- replicate(1000, expr = {
 } )
 mean(UCL>4)  #coverage probability
 
-```
 
-
-## Question6.6
-```{r}
+## ------------------------------------------------------------------------
 b <- NULL
 n=1e4
 sk <- function(x) {
@@ -327,12 +259,8 @@ var_b  #var of skewness
 cv <- qnorm(q, 0, sqrt(6/n)) # large sample approximation
 cv
 
-```
 
-## assignment4
-## Question6.7
-
-```{r}
+## ------------------------------------------------------------------------
 set.seed(233)
 pwr <- NULL
 sk <- function(x) {
@@ -364,11 +292,8 @@ pwr <- mean(sktests)
 pwr
 
 
-```
 
-
-## Question6.A
-```{r}
+## ------------------------------------------------------------------------
 n <- 200
 alpha <- .05
 mu0 <- 1
@@ -390,27 +315,8 @@ names(type1) <- c('chi-square','union','exp')
 #type1error
 type1
 
-```
 
-
-## Discussion
-
-(1)H0:power1=power2 $\leftrightarrow$
-H1:power1!=power2
-
-
-(2)McNemar test
-
-
-(3)True positive rate
-
-
- We know power means we can get False negative rate, so we need True positive rate for McNemar test.
-
-## assignment6
-## Question7.8
-
-```{r}
+## ------------------------------------------------------------------------
 set.seed(123)
 library(bootstrap)
 lambda_hat <- eigen(cov(scor))$values
@@ -430,11 +336,8 @@ bias_jack
 # standard error
 se_jack
 
-```
 
-
-## Question7.10
-```{r}
+## ------------------------------------------------------------------------
 library(DAAG)
 attach(ironslag)
 set.seed(123)
@@ -475,17 +378,8 @@ cv_select<- matrix(c(error,rsqu),nrow = 2, ncol = 4, byrow = T, dimnames = list(
                                c('model1','model2','model3','model4')))
 knitr::kable(cv_select)
 
-```
 
-According to the prediction error and adjusted $R^2$, Model 2, the quadratic model, would be the best fit for the data.
-
-
-
-
-## assignment8
-## Question9.4
-
-```{r}
+## ------------------------------------------------------------------------
 set.seed(1234)
 library(GeneralizedHyperbolic)
 rw.Metropolis <- function(n, sigma, x0, N) {
@@ -526,20 +420,13 @@ for (j in 1:4) {
 #number of candidate points accepted
 print(1-c(rw1$k/N, rw2$k/N, rw3$k/N, rw4$k/N))
 
-```
 
-
-## assignment9
-## Question11.1
-
-```{r}
+## ------------------------------------------------------------------------
 x <- c(1:100)
 isTRUE(all.equal(log(exp(x)),exp(log(x))))
 isTRUE(log(exp(x)) == exp(log(x)))
-```
 
-## Question11.5
-```{r}
+## ------------------------------------------------------------------------
 a <- 1
 ck <- function(x,k){
   sqrt(x^2*k/(k+1-x^2))
@@ -560,10 +447,8 @@ uniroot(g,c(1,2), k=25)$`root`
 uniroot(g,c(4,5), k=25)$`root`
 uniroot(g,c(1,2), k=100)$`root`
 
-```
 
-## Slides
-```{r}
+## ------------------------------------------------------------------------
 na <- 28
 nb <- 24
 noo <- 41
@@ -599,16 +484,8 @@ for (i in 1:20) {
 }
 theta #p & q
 plot(-Lold[-1])
-```
 
-
-I feel strange that the log-maximum likelihood values decrease.
-
-
-## assignment10
-## Page204.3
-
-```{r}
+## ------------------------------------------------------------------------
 formulas <- list(
   mpg ~ disp,
   mpg ~ I(1 / disp),
@@ -620,10 +497,8 @@ for (x in formulas) {     #use for
 }
 model1 <- lapply(formulas,lm,data = mtcars) #use lapply
 
-```
 
-## 4
-```{r}
+## ------------------------------------------------------------------------
 bootstraps <- lapply(1:10, function(i) {
   rows <- sample(1:nrow(mtcars), rep = TRUE)
   mtcars[rows, ]
@@ -634,20 +509,15 @@ for (x in bootstraps) {           #use for
   print(lm(formula = mpg ~ disp,x))
 }
 
-```
 
-## 5
-```{r}
+## ------------------------------------------------------------------------
 rsq <- function(mod) summary(mod)$r.squared
 sapply(model1, rsq)
 sapply(model2, rsq)
 
 
-```
 
-
-#page214 3
-```{r}
+## ------------------------------------------------------------------------
 trials <- replicate(
   100,
   t.test(rpois(10, 10), rpois(7, 10)),
@@ -655,10 +525,8 @@ trials <- replicate(
 )
 sapply(trials, '[[', 3) 
 
-```
 
-#7
-```{r}
+## ------------------------------------------------------------------------
 library(devtools)
 library(parallelsugar)
 library(parallel)
@@ -678,12 +546,8 @@ mcsapply<- function(x,f,n){  #mcsapply function
 mcsapply(1:4, boot_lm,1)
 unlist(mclapply(1:4, boot_lm, mc.cores = 1))
 
-```
 
-## assignment11
-
-
-```{r}
+## ------------------------------------------------------------------------
 library(GeneralizedHyperbolic)
 library(microbenchmark)
 #using c++
@@ -754,14 +618,6 @@ for (j in 1:4) {
 ## compare the computation time
 ts <- microbenchmark(rwR=rw.Metropolis(sigma[1], x0, N), rwC=rwMetropolisC(sigma[1], x0, N))
 summary(ts)[,c(1,3,5,6)]
-
-
-```
-
-we can get shorter calculation time using method rcpp.
-
-
-
 
 
 

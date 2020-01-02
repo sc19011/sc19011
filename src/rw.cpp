@@ -1,20 +1,18 @@
-//' @title A Gibbs sampler using Rcpp
-//' @description A Gibbs sampler using Rcpp
+#include <Rcpp.h>
+using namespace Rcpp;
+//' @title A random walk Metropolis sampler using Rcpp
+//' @description Implement a random walk Metropolis sampler for generating the standard Laplace distribution using Rcpp
 //' @param N the number of samples
-//' @param thin the number of between-sample random numbers
+//' @param sigma parameter for produces a normal distribution random sample
+//' @param x0  Initial value
 //' @return a random sample of size \code{n}
 //' @examples
 //' \dontrun{
-//' rnC <- gibbsC(100,10)
-//' par(mfrow=c(2,1));
-//' plot(rnC[,1],type='l')
-//' plot(rnC[,2],type='l')
+//' sigma <- c(.05, .5, 2, 16)
+//' x0 <- 25
+//' rw1c <- rwMetropolisC(sigma[1], x0, N)
 //' }
 //' @export
-// [[Rcpp::export]]
-
-#include <Rcpp.h>
-using namespace Rcpp;
 // [[Rcpp::export]]
 NumericVector rwMetropolisC(double sigma, double x0, int N){
   NumericVector x(N);

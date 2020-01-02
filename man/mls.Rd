@@ -4,10 +4,12 @@
 \alias{mls}
 \title{fill in missing values using R.}
 \usage{
-mls(data_temp)
+mls(data_temp, sigma)
 }
 \arguments{
 \item{data_temp}{data}
+
+\item{sigma}{range of fitting, small sigma means low influence from long distance data}
 }
 \value{
 an estimator of missing values\code{n}
@@ -18,6 +20,6 @@ fill in missing values using R
 \examples{
 \dontrun{
 data <- c(1,2,3,0,3,2,1)
-mls(data)
+mls(data,0.4)
 }
 }
