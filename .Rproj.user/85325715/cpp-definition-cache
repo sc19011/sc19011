@@ -2,16 +2,16 @@
     {
         "definitions" : [
             {
-                "column" : 6,
-                "file" : "D://statcomp/src/rcpp_hello_world.cpp",
+                "column" : 15,
+                "file" : "D:/statcomp/src/rw.cpp",
                 "kind" : 6,
-                "line" : 6,
-                "name" : "rcpp_hello_world",
+                "line" : 19,
+                "name" : "rwMetropolisC(double, double, int)",
                 "parent_name" : "",
-                "usr" : "c:@F@rcpp_hello_world#"
+                "usr" : "c:@F@rwMetropolisC#d#d#I#"
             }
         ],
-        "file" : "D://statcomp/src/rcpp_hello_world.cpp",
-        "file_last_write" : 1577893317.000000
+        "file" : "D:/statcomp/src/rw.cpp",
+        "file_last_write" : 1577946238.000000
     }
 ]
