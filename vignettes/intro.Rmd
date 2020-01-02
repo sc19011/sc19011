@@ -10,49 +10,52 @@ vignette: >
 ---
 
 ## Overview
-sc19011 provides two function to estimate sparse matrix and linear regression with sparse matrices
+sc19011 provide function to deal with linear regression with sparse matrices and fill in missing data.
 
-The JRRS(joint rank and row selection) estimate the regression coefficients with rank restraint.
+## mls
 
-The source R code for JRRS is as follows:
-```{r,eval=FALSE}
-JRRS <- function(x,y) {
-  # r is the rank of A, p is ncols of X, nn is ncols of Y
-  # model is Y=XA+E
-  r=nrow(x);p=ncol(x);nn=ncol(y) ;mm=nrow(x)
-  jrrs<-rep(0,r+6)
-  ccc<-array(0,dim=c((r+6),p,nn))
-  for(ii in 1:(r+6)){
-    cat("rank=",ii,"\n")
-    ffiitt<-srrr(Y=y,X=x,nrank=ii,method='glasso',ic.type='BIC')
-    ccc[ii,,]<-ffiitt$coef
-    r.max<-min(nn,p/2,mm-1)
-    p0.max=min(p/2,mm/2)
-    s<-norm(y-x%*%ccc[ii,,],type='F')^2/(mm*nn-(nn+p0.max-r.max)*r.max)
-    s <- 1
-    # JRRS1, ii is rank(B)
-    mse<-norm(y-x%*%ccc[ii,,],type='F')^2
-    #j<-sum(apply(ccc[ii,,],1,sum)!=0)
-    j <-15
-    pen<-const*s^2*ii*(2*nn+log(2*exp(1))*j+j*log(exp(1)*p/j))
-    jrrs[ii]<-mse+pen
+Sometimes, we get missing data, which is bad for fitting models. The mls function can fill in missing values, using local quadratic polynomial approximation.
+
+The source R code for mls is as follows:
+```{r,eval=TRUE}
+mls <-  function(data_temp){
+  b=0
+  x0 <- which(data == 0)
+  index <- seq(1,length(data_temp),1)/(length(data_temp))
+  x0=x0/(length(data_temp))
+  models <- function(x,theta){
+    matrix(theta, nrow = 1,ncol = 3, byrow = T)%*%matrix(c(1-x^2,2*x*(1-x),x^2), nrow = 3, ncol = length(x),byrow = T)
   }
-  # ，idx is jrrs1 min rank
-  idx<-which(jrrs==min(jrrs),arr.ind=TRUE) 
-  cat("idx=",idx,"\n")
-  # estimate B
-  ccc[idx,,]<-srrr(Y=y,X=x,nrank=idx,method='glasso',ic.type='BIC')$coef
-  Best <- srrr(Y=y,X=x,nrank=1,method='glasso',ic.type='BIC')$coef
-  return(Best)
+  loss = function(theta, x, y){
+    sum(exp(-(x-x0)^2/0.4)*(y-models(x, theta))^2)
+  }
+  theta0 <- c(0, 0, 0, 0, 0, 0)
+  theta.L <- optim(theta0, loss, x=index, y=data_temp, method = "BFGS")
+  theta.L
+  models(x0,theta.L$`par`)
+  b = models(x0,theta.L$`par`)
+  return(b)
 }
+
 ```
+
+For example
+We have a missing data in the sequence. Using mls function can give a value for the missing data, according to the neighborhood data.
+```{r}
+data <- c(1,2,3,0,3,2,1)
+mls(data)
+
+```
+
+## RSC
 
 The RSC function is used to estimate the rank of the regression coefficients.
 
 The source R code for JRRS is as follows:
-```{r,eval=FALSE}
+```{r,eval=TRUE}
+library(MASS)
 RSC <-  function(x,y){
-  p=ncol(x);nn=ncol(y) ;mm=nrow(x)
+  p=ncol(x);nn=ncol(y) ;mm=min(nrow(x),nn)
   M=t(x)%*%x
   mpM=ginv(M) # M的MP逆
   P=x%*%mpM%*%t(x)
@@ -63,9 +66,9 @@ RSC <-  function(x,y){
   k<- mm
   hatBk<-array(0,dim=c(k,p,nn))
   RSC<-rep(0,k-1)
-  mu=20
+  mu=70
   for(kk in 2:k){
-    cat("rank=",kk,"\n")
+    #cat("rank=",kk,"\n")
     Wk=W[,1:kk]
     Gk=G[1:kk,]
     hatBk[kk-1,,]=Wk%*%Gk
@@ -78,7 +81,58 @@ RSC <-  function(x,y){
 }
 ```
 
-It will return the rank of the regression coefficients.
+RSC will return the rank of the regression coefficients.
+
+For example
+
+In a linear model simulation, the data is sparse. RSC function can give the estimator of the rank for sparse regression coefficients.
+
+```{r,eval=TRUE}
+library(mvtnorm)
+J <- 15
+p <- 25
+n <- 25
+r=5
+m=100
+rho=0.1
+sigma=1
+b=0.4
+Sigma <- matrix(0, nrow = p, ncol = p)
+for (i in 1:p) {
+  for (j in 1:p) {
+    Sigma[i,j] <- rho^(abs(i-j))
+  }
+}
+X <- matrix(0,nrow = m, ncol = p)
+for (i in 1:m) {
+  X[i,] <- rmvnorm(1,mean = rep(0,p), sigma=Sigma)
+} 
+E <- matrix(0,nrow = m, ncol = n)
+for (i in 1:m) {
+  E[i,] <- rmvnorm(1,mean = rep(0,n), sigma=diag(n))
+} 
+B0 <- matrix(0,nrow = J, ncol = r)
+B1 <- matrix(0,nrow = r, ncol = n)
+for (i in 1:J) {
+  for (j in 1:r) {
+    B0[i,j] <- rnorm(1)
+  }
+}
+for (i in 1:r) {
+  for (j in 1:n) {
+    B1[i,j] <- rnorm(1)
+  }
+}
+A <- matrix(0, nrow = p, ncol = n)
+for (i in 1:J) {
+  for (j in 1:n) {
+    A[i,j] <- (b*B0%*%B1)[i,j]
+  }
+}
+Y <- t(t(X))%*%A+E
+
+RSC(X,Y)
+```
 
 ## assignment1
 ## Question3.4
@@ -626,9 +680,85 @@ unlist(mclapply(1:4, boot_lm, mc.cores = 1))
 
 ```
 
+## assignment11
 
 
+```{r}
+library(GeneralizedHyperbolic)
+library(microbenchmark)
+#using c++
+library(Rcpp)
+dir_cpp <- '../src/'
+# Can create source file in Rstudio
+sourceCpp(paste0(dir_cpp,"rw.cpp"))
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+x0 <- 25
+rw1c <- rwMetropolisC(sigma[1], x0, N)
+rw2c <- rwMetropolisC(sigma[2], x0, N)
+rw3c <- rwMetropolisC(sigma[3], x0, N)
+rw4c <- rwMetropolisC(sigma[4], x0, N)
+rwc <- cbind(rw1c, rw2c, rw3c,  rw4c)
+par(mfrow=c(1,1)) 
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+for (j in 1:4) {
+  plot(rwc[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rwc[,j]))
+  abline(h=refline)
+}
 
+
+#using r
+set.seed(1234)
+lap_f = function(x) exp(-abs(x))
+rw.Metropolis = function(sigma, x0, N){
+  x = numeric(N)
+  x[1] = x0
+  u = runif(N)
+  k = 0
+  for (i in 2:N) {
+    y = rnorm(1, x[i-1], sigma)
+    if (u[i] <= (lap_f(y) / lap_f(x[i-1]))) x[i] = y 
+    else {
+      x[i] = x[i-1]
+      k = k+1
+    }
+  }
+  return(list(x = x, k = k))
+}
+
+N <- 2000
+sigma <- c(.05, .5, 2, 16)
+x0 <- 25
+rw1 <- rw.Metropolis(sigma[1], x0, N)
+rw2 <- rw.Metropolis(sigma[2], x0, N)
+rw3 <- rw.Metropolis(sigma[3], x0, N)
+rw4 <- rw.Metropolis(sigma[4], x0, N)
+par(mfrow=c(1,1))  #display 4 graphs together
+refline <- qskewlap(c(.025, .975), mu = 0, alpha = 1, beta = 1)
+rw <- cbind(rw1$x, rw2$x, rw3$x,  rw4$x)
+for (j in 1:4) {
+  plot(rw[,j], type="l",
+       xlab=bquote(sigma == .(round(sigma[j],3))),
+       ylab="X", ylim=range(rw[,j]))
+  abline(h=refline)
+}
+
+##qqplot
+for (j in 1:4) {
+  qqplot(rwc[,j], rw[,j], xlab = 'rwc', ylab = 'rwr')
+  qqline(rwc[,j], col = 2)
+}
+
+## compare the computation time
+ts <- microbenchmark(rwR=rw.Metropolis(sigma[1], x0, N), rwC=rwMetropolisC(sigma[1], x0, N))
+summary(ts)[,c(1,3,5,6)]
+
+
+```
+
+we can get shorter calculation time using method rcpp.
 
 
 
