@@ -19,7 +19,6 @@ linear regression with rank restraint using R
 }
 \examples{
 \dontrun{
-Y <- t(t(X))\%*\%A+E
-RSC(X,Y)
+rnR <- gibbsR(100,10)
 }
 }

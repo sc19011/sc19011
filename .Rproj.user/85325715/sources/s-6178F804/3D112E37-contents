@@ -6,8 +6,7 @@
 #' @return an estimator of missing values\code{n}
 #' @examples
 #' \dontrun{
-#' data <- c(1,2,3,0,3,2,1)
-#' mls(data)
+#' JRRS <- function(x,y)
 #' }
 #' @export
 mls <-  function(data_temp){

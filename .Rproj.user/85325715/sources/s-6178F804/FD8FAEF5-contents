@@ -6,8 +6,7 @@
 #' @return the rank of regression coefficients\code{n}
 #' @examples
 #' \dontrun{
-#' Y <- t(t(X))%*%A+E
-#' RSC(X,Y)
+#' rnR <- gibbsR(100,10)
 #' }
 #' @export
 RSC <-  function(x,y){
